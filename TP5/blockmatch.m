@@ -1,50 +1,90 @@
-function ret = blockmatch( imgRef, imgCour )
+function [imgPredite] = blockmatch( imgRef, imgCour, N, W)
 
+%tabResults de la forme :
+%[
+%{currentBloc,msdValue,vecteurDeplacement, bestBloc, NMSE}
+%        ...
+%pour chaque bloc courant
+%        ...
+%]
 
-N=2;
+% N=1;
 
 %taille des blocs
 M=2*N+1;
 
-%taille zone recherche
-W=5;
+%param taille zone recherche
+% W=5;
 
 %taile de la zone de recherche
 Z=2*W+M;
 
 [ligne, colonne] = size(imgRef);
-nbBlocs=0;
-msdValue=0;
-bestBloc=[];
+%nbBlocs=0;
 
+% démarrage du timer
+tic;
+
+% imgPredite = uint8(zeros([ligne colonne]));
+imgPredite=imgCour;
+%Pour chaque bloc
 for i = 1 : ligne / M
     for j = 1 : colonne / M
-        nbBlocs = nbBlocs + 1;
-        blocCour = imgCour((i-1) * M + 1 : i * M, (j-1)*M + 1 : j*M);
-        zoneRecherche = imgRef((i+(M/2)-1) * Z + 1 : (i+(M/2)) * Z, (j+(M/2)-1)*Z + 1 : (j+(M/2))*Z);
-    %Parcours des blocs de la zone de recherche
-    for k = 1 : Z
-        for l = 1 : Z
-            blocCompare=zoneRecherche(k : k+M, l : l+M);
-            newMsdValue = msd(blocCour, blocCompare);
-            
-            %on met à jour la valeur du bloc le plus proche
-            if(newMsdValue>msdValue)
-                msdValue=newMsdValue;
-                bestBloc=blocCompare;
+        %nbBlocs = nbBlocs + 1;
+        
+        %découpage du bloc courant
+        blocCour = double(imgCour((i-1) * M + 1 : i * M, (j-1)*M + 1 : j*M));
+        
+        % Centre du bloc:
+        centreX=(i-1)*M+(M+1)/2;
+        centreY=(j-1)*M+(M+1)/2;
+
+        % On a la zone qui s'étale a Z autour du centre
+        debutXRech=centreX-Z;
+        if debutXRech<1
+            debutXRech=1;
+        end
+
+        debutYRech=centreY-Z;
+        if debutYRech<1
+            debutYRech=1;
+        end
+
+        finXRech=centreX+Z;
+        if finXRech>ligne
+            finXRech=ligne;
+        end
+
+        finYRech=centreY+Z;
+        if finYRech>colonne
+            finYRech=colonne;
+        end
+
+        %Parcours des blocs de la zone de recherche
+        %initialisations
+        msdValue=inf;
+        for k = debutXRech : finXRech-M
+            for l = debutYRech : finYRech-M
+                blocCompare=double(imgRef(k:k+M-1,l:M+l-1));
+                %calcul du critère de matching
+                % Raccourci de fou pour faire la MSD!!!
+                newMsdValue = (sum((blocCour-blocCompare).^2))/M^2;
+                
+                %on met à jour les valeurs du meilleur bloc
+                if(newMsdValue<msdValue)
+                    msdValue=newMsdValue;
+                    bestPosX=k;
+                    bestPosY=l;
+                end
             end
-            [ NMSE, SNR ] = q1( blocCour, blocCompare )
-         end
-    end        
+        end
+        imgPredite(bestPosX: bestPosX+M-1, bestPosY: bestPosY+M-1)=blocCour;
+
     end
 end
-
-%remplacer la valeur de retour par le vecteur de mouvement ?
-ret = bestBloc;
+%erreur de prédiction
+[ NMSE, SNR ] = q1( imgRef, imgPredite );
+[NMSE,toc,W]
+imwrite(imgPredite,'prediction.jpg','jpg','Quality',100);
+%récuperation de la durée de traitement
 end
-
-
-%TODO
-%gérer les dépassements de blocs
-%corrections indices
-%calcul vecteur déplacement
